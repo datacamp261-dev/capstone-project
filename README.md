@@ -3,7 +3,7 @@
 
 # Functionality of the application
 
-This application will allow creating/removing/updating/fetching Meal items. Each Meal item can optionally have an attachment image. Each user only has access to Meal items that he/she has created.
+This application will allow creating/removing/updating/fetching Meal items. Each Meal item can optionally have an attachment image. Each user only has access to Meal items that he/she has created. To get a quick idea as to what the app looks like, check the screenshots
 
 # Meal items
 
