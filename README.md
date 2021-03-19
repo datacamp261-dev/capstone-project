@@ -46,11 +46,11 @@ It returns a new Meal item that looks like this:
 ```
 
 * `UpdateMeal` - updates a Meal Item created by the current user and returns an empty body. Following fields can be updated:
-* `name` (string) - name of a Meal item (e.g. "Hash browns")
-* `dueDate` (string) - date and time for which an meal item is planned for
-* `done` (boolean) - true if an the meal was cooked as planned
-* `attachmentUrl` (string) (optional) - a URL pointing to an image attached to a Meal item
-* `recipe` (string) - a short description of steps involved in cooking the meal
+  * `name` (string) - name of a Meal item (e.g. "Hash browns")
+  * `dueDate` (string) - date and time for which an meal item is planned for
+  * `done` (boolean) - true if an the meal was cooked as planned
+  * `attachmentUrl` (string) (optional) - a URL pointing to an image attached to a Meal item
+  * `recipe` (string) - a short description of steps involved in cooking the meal
 
 * `DeleteMeal` - deletes a Meal item created by the current user. Expects an id of a Meal item to remove.
 
