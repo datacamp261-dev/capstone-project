@@ -1,0 +1,234 @@
+service:
+  name: mealplanner
+
+plugins:
+  - serverless-webpack
+  - serverless-iam-roles-per-function
+  - serverless-reqvalidator-plugin
+  - serverless-aws-documentation
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'eu-central-1'}
+  rolePermissionsBoundary: arn:aws:iam::862297924533:policy/acs/acs-boundary-policy
+  
+  environment:
+    MEALS_TABLE: meals-${self:provider.stage}
+    MEALS_INDEX: userId
+    IMAGES_S3_BUCKET: serverless-mealplanner-attachment-datacamp261-${self:provider.stage}
+    SIGNED_URL_EXPIRATION: 300
+    AUTH_0_SECRET_ID: Auth0Secret-${self:provider.stage}
+    AUTH_0_SECRET_FIELD: auth0Secret
+  
+  tracing: true
+  iamRoleStatements:
+    - Effect: Allow # xray permissions for all functions
+      Action:
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
+      Resource:
+          - "*"
+
+functions:
+
+  Auth:
+    handler: src/lambda/auth/auth0Authorizer.handler
+
+  # TODO: Configure this function
+  GetMeals:
+    handler: src/lambda/http/getMeals.handler
+    events:
+      - http:
+          method: get
+          path: meals
+          cors: true
+          authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.MEALS_TABLE}
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.MEALS_TABLE}/index/${self:provider.environment.MEALS_INDEX}
+
+  # TODO: Configure this function
+  CreateMeal:
+    handler: src/lambda/http/createMeal.handler
+    events:
+      - http:
+          method: post
+          path: meals
+          cors: true
+          authorizer: Auth
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Create a new meal
+            description: Create a new meal
+            requestModels:
+              'application/json': CreateMealRequest
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.MEALS_TABLE}
+
+  # TODO: Configure this function
+  UpdateMeal:
+    handler: src/lambda/http/updateMeal.handler
+    events:
+      - http:
+          method: patch
+          path: meals/{mealId}
+          cors: true
+          authorizer: Auth
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: Update a  Meal
+            description: Update a Meal
+            requestModels:
+              'application/json': UpdateMealRequest 
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.MEALS_TABLE}
+
+
+  # TODO: Configure this function
+  DeleteMeal:
+    handler: src/lambda/http/deleteMeal.handler
+    events:
+      - http:
+          method: delete
+          path: meals/{mealId}
+          cors: true
+          authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:DeleteObject
+        Resource: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*      
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.MEALS_TABLE}
+
+
+  # TODO: Configure this function
+  GenerateUploadUrl:
+    handler: src/lambda/http/generateUploadUrl.handler
+    events:
+      - http:
+          method: post
+          path: meals/{mealId}/attachment
+          cors: true
+          authorizer: Auth
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+        Resource: arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*
+      - Effect: Allow
+        Action:
+          - dynamodb:UpdateItem
+        Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.MEALS_TABLE}
+
+resources:
+  Resources:
+    MealsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+        - AttributeName: mealId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: mealId
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.MEALS_TABLE}
+        LocalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.MEALS_INDEX}
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL # What attributes will be copied to an index
+              
+    RequestBodyValidator:
+      Type: AWS::ApiGateway::RequestValidator
+      Properties:
+        Name: 'request-body-validator'
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ValidateRequestBody: true
+        ValidateRequestParameters: false
+        
+    AttachmentsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.IMAGES_S3_BUCKET}
+        Tags:                                                           # Add tags to allow public access in ACS
+          - Key: "Allowed_Public_Access"
+            Value: "True"
+        PublicAccessBlockConfiguration:                                 # Make sure public access is not blocked
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+        CorsConfiguration:
+          CorsRules:
+            -
+              AllowedOrigins:
+                - '*'
+              AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - GET
+                - PUT
+                - POST
+                - DELETE
+                - HEAD
+              MaxAge: 3000
+
+    BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        PolicyDocument:
+          Id: MyPolicy
+          Version: "2012-10-17"
+          Statement:
+            - Sid: PublicReadForGetBucketObjects
+              Effect: Allow
+              Principal: '*'
+              Action: 's3:GetObject'
+              Resource: 'arn:aws:s3:::${self:provider.environment.IMAGES_S3_BUCKET}/*'
+        Bucket: !Ref AttachmentsBucket
+
+custom:
+
+  documentation:
+    api:
+      info:
+        version: v1.0.0
+        title: MealApp API
+        description: Serverless application for planning meals
+    models:
+      - name: CreateMealRequest
+        contentType: application/json
+        schema: ${file(models/create-meal-item-request.json)}
+      - name: UpdateMealRequest
+        contentType: application/json
+        schema: ${file(models/update-meal-item-request.json)}
