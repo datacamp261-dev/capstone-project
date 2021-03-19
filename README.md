@@ -3,9 +3,9 @@
 
 # Functionality of the application
 
-This application will allow creating/removing/updating/fetching Meal items. Each TODO item can optionally have an attachment image. Each user only has access to Meal items that he/she has created.
+This application will allow creating/removing/updating/fetching Meal items. Each Meal item can optionally have an attachment image. Each user only has access to Meal items that he/she has created.
 
-# TODO items
+# Meal items
 
 The application should store Meal items, and each Meal item contains the following fields:
 
